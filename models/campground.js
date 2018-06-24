@@ -5,6 +5,9 @@ let campgroundSchema = new mongoose.Schema({
     name: String,
     price: String,
     image: String,
+    location: String,
+    lat: Number,
+    lng: Number,
     description: String,
     author: {
         id: {
@@ -22,3 +25,4 @@ let campgroundSchema = new mongoose.Schema({
 });
 //makes a model that ises schema and has methods added that we can use to interact with data base
 module.exports = mongoose.model("Campground", campgroundSchema);
+

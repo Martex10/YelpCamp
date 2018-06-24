@@ -1,46 +1,66 @@
+require('dotenv').config();
+
 const express = require("express");
 const router = express.Router();
 const Campground = require("../models/campground");
 const Comment = require("../models/comment");
 const middleware = require("../middleware");
 
+var NodeGeocoder = require('node-geocoder');
+ 
+var options = {
+  provider: 'google',
+  httpAdapter: 'https',
+  apiKey: process.env.GEOCODER_API_KEY,
+  formatter: null
+};
+ 
+var geocoder = NodeGeocoder(options);
 
 // index route-route to campground page show all campgrounds
+//INDEX - show all campgrounds
 router.get("/", function(req, res){
-    //get all campgrounds from DB
+    // Get all campgrounds from DB
     Campground.find({}, function(err, allCampgrounds){
-        if(err){
-            console.log("error");
-        } else {
-            res.render("campgrounds/index", {campgrounds: allCampgrounds, currentUser: req.user});
-        }
+       if(err){
+           console.log(err);
+       } else {
+          res.render("campgrounds/index",{campgrounds: allCampgrounds, page: 'campgrounds'});
+       }
     });
 });
 
-//CREATE route add new campground to data base
+//CREATE - add new campground to DB
 router.post("/", middleware.isLoggedIn, function(req, res){
-    //get data from form and add to camp grounds array 
-    const name = req.body.name,
-     price = req.body.price,
-     image = req.body.image,
-     desc = req.body.description,
-     author ={
-        id: req.user._id,
-        username: req.user.username
-    };
-    //created an object to push on to the Array
-    let newCampground = {name: name, image: image, description: desc, author: author, price: price};
-    // create a new camp ground and save to data base
+  // get data from form and add to campgrounds array
+  let name = req.body.name;
+  let price = req.body.price;
+  let image = req.body.image;
+  let desc = req.body.description;
+  let author = {
+      id: req.user._id,
+      username: req.user.username
+  };
+  geocoder.geocode(req.body.location, function (err, data) {
+    if (err || !data.length) {
+      req.flash('error', 'Invalid address');
+      return res.redirect('back');
+    }
+    let lat = data[0].latitude;
+    let lng = data[0].longitude;
+    let location = data[0].formattedAddress;
+    let newCampground = {name: name, image: image, description: desc, author:author, location: location, price: price, lat: lat, lng: lng};
+    // Create a new campground and save to DB
     Campground.create(newCampground, function(err, newlyCreated){
         if(err){
-            console.log("ERROR");
-            console.log(err );
+            console.log(err);
         } else {
-        // redirect to campgrounds page see changes. as a get request   
+            //redirect back to campgrounds page
             console.log(newlyCreated);
             res.redirect("/campgrounds");
         }
     });
+  });
 });
 
 //NEW route shows form so that user can add new camp ground info
@@ -69,19 +89,28 @@ router.get("/:id/edit", middleware.checkCampgroundOwnership, function(req, res){
         res.render("campgrounds/edit", {campground: foundCampground});
     });
 });
-        
-    
 
-//update campground routes
+// UPDATE CAMPGROUND ROUTE
 router.put("/:id", middleware.checkCampgroundOwnership, function(req, res){
-    //find and update the correct campground
-    Campground.findByIdAndUpdate(req.params.id, req.body.campground, function(err, updatedCampground){
+  geocoder.geocode(req.body.location, function (err, data) {
+    if (err || !data.length) {
+      req.flash('error', 'Invalid address');
+      return res.redirect('back');
+    }
+    req.body.campground.lat = data[0].latitude;
+    req.body.campground.lng = data[0].longitude;
+    req.body.campground.location = data[0].formattedAddress;
+
+    Campground.findByIdAndUpdate(req.params.id, req.body.campground, function(err, campground){
         if(err){
-            res.redirect("/campgrounds");
+            req.flash("error", err.message);
+            res.redirect("back");
         } else {
-            res.redirect("/campgrounds/" + req.params.id);
+            req.flash("success","Successfully Updated!");
+            res.redirect("/campgrounds/" + campground._id);
         }
     });
+  });
 });
 
 //Destry campground route
